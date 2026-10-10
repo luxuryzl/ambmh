@@ -1,0 +1,162 @@
+generator client {
+    provider = "prisma-client"  // ← 注意：不是 prisma-client-js
+    output   = "../src/generated/prisma"
+    importFileExtension = "js"  // ← 关键：让内部导入带上 .js
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+// 用户
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  nickname     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  portfolios   Portfolio[]
+  watchlists   Watchlist[]
+  journals     Journal[]
+
+  @@map("users")
+}
+
+// ============ 股票基础信息 ============
+model Stock {
+  id        String   @id @default(cuid())
+  code      String   @unique          // 如 "600519"、"00700"
+  name      String
+  market    String                     // "SH" | "SZ" | "BJ" | "HK" | "US"
+  industry  String?
+  listDate  DateTime?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dailyQuotes DailyQuote[]
+  fundFlows   FundFlow[]
+  positions   Position[]
+  trades      Trade[]
+  watchlists  Watchlist[]
+  signals     Signal[]
+
+  @@index([market])
+  @@index([industry])
+  @@map("stocks")
+}
+
+// ============ 日线行情 ============
+model DailyQuote {
+  id        String   @id @default(cuid())
+  stockId   String
+  date      DateTime                   // 交易日 00:00:00 UTC
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float                      // 股/手，按数据源统一
+  amount    Float?                     // 成交额
+  pctChange Float?                     // 涨跌幅 %
+  turnover  Float?                     // 换手率 %
+  createdAt DateTime @default(now())
+
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([stockId, date])
+  @@index([date])
+  @@map("daily_quotes")
+}
+
+// ============ 阶段 2 只建上面三张表；下面为占位引用，先声明空模型，
+//             真实字段在阶段 6+ 补齐。可以让 schema 通过校验。
+model FundFlow {
+  id      String   @id @default(cuid())
+  stockId String
+  date    DateTime
+  stock   Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  @@unique([stockId, date])
+  @@map("fund_flows")
+}
+
+model Portfolio {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  cash      Float    @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  positions Position[]
+  trades    Trade[]
+  @@map("portfolios")
+}
+
+model Position {
+  id          String   @id @default(cuid())
+  portfolioId String
+  stockId     String
+  qty         Float
+  avgCost     Float
+  openedAt    DateTime @default(now())
+  closedAt    DateTime?
+  status      String   @default("OPEN")
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  stock       Stock     @relation(fields: [stockId], references: [id])
+  @@index([portfolioId, status])
+  @@map("positions")
+}
+
+model Trade {
+  id          String   @id @default(cuid())
+  portfolioId String
+  stockId     String
+  side        String
+  qty         Float
+  price       Float
+  fee         Float    @default(0)
+  tradedAt    DateTime @default(now())
+  note        String?
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  stock       Stock     @relation(fields: [stockId], references: [id])
+  @@index([portfolioId, tradedAt])
+  @@map("trades")
+}
+
+model Watchlist {
+  id      String   @id @default(cuid())
+  userId  String
+  stockId String
+  group   String?
+  note    String?
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock   Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  @@unique([userId, stockId])
+  @@map("watchlists")
+}
+
+model Journal {
+  id      String   @id @default(cuid())
+  userId  String
+  date    DateTime
+  content String
+  mood    String?
+  tags    String?
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, date])
+  @@map("journals")
+}
+
+model Signal {
+  id         String   @id @default(cuid())
+  stockId    String
+  strategyId String?
+  date       DateTime
+  type       String
+  score      Float?
+  snapshot   String?
+  stock      Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  @@index([date, type])
+  @@map("signals")
+}

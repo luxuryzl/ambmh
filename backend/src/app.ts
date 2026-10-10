@@ -5,8 +5,12 @@ import loggerPlugin from "./plugins/logger.js";
 import corsPlugin from "./plugins/cors.js";
 import helmetPlugin from "./plugins/helmet.js";
 import rateLimitPlugin from "./plugins/rate-limit.js";
+// 添加prisma
+import prismaPlugin from "./plugins/prisma.js";
 import healthRoutes from "./routes/health.js";
 import pingRoutes from "./routes/ping.js";
+// 添加dbRoutes
+import dbRoutes from "./routes/db.js";
 
 //
 export async function buildApp(): Promise<FastifyInstance> {
@@ -42,6 +46,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(helmetPlugin); //为 Fastify 应用添加 HTTP 安全响应头（Security Headers）‌的作用，特别是针对‌开发环境‌和‌生产环境‌做了差异化的内容安全策略（CSP）配置，并允许跨域资源加载。
   await app.register(corsPlugin);
   await app.register(rateLimitPlugin);
+  // 添加 prisma 插件
+  await app.register(prismaPlugin);
 
   // 全局错误处理：统一响应格式
   app.setErrorHandler((err: unknown, req, reply) => {
@@ -72,6 +78,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     async (v1) => {
       await v1.register(healthRoutes);
       await v1.register(pingRoutes);
+      await v1.register(dbRoutes);
     },
     { prefix: "/api/v1" },
   );

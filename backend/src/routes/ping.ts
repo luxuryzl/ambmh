@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { ok } from "../utils/reply.js";
 import { envelope, errorEnvelope } from "../schemas/envelope.js";
-import { required } from "zod/mini";
 /**
  * 它的主要功能是作为一个‌轻量级的连通性检查（Connectivity Check）‌或‌活性探测（Liveness Probe）‌接口
  * 这个 /ping 接口的核心目的‌：是以最小的开销（无数据库查询、无复杂逻辑）

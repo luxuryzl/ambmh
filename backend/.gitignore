@@ -42,3 +42,5 @@ __screenshots__/
 #prisma
 prisma/*.db
 prisma/*.db-journal
+prisma/migrations/**/migration_lock.toml
+src/generated/prisma
