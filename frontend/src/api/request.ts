@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
 import axiosRetry from "axios-retry";
 import { ElMessage } from "element-plus";
+import { clearToken, getToken, setToken } from "../utils/storage";
 
 // unknown（安全的未知）,含义‌：“我知道这里有个值，但我现在不知道它是什么类型，‌在使用前必须验证‌。”
 // any（危险的逃逸舱）‌,含义‌：“我放弃类型检查，你可以对它做任何事。”
@@ -8,6 +9,16 @@ export interface ApiResponse<T = unknown> {
   code: number;
   msg: string;
   data: T | null;
+}
+
+// 区分401是否是token失效，还是登录失败,定义了一个数组，存放所有不需要身份验证即可访问的路径
+const AUTH_FREE_URL = ["/auth/login", "/auth/register"];
+
+function isAuthFree(url: string | undefined): boolean {
+  if (!url) return false;
+  return AUTH_FREE_URL.some((u) => url.includes(u));
+  //some() 方法会遍历数组中的每一个元素,对‌任意一个元素返回 true，结果返回true
+  // includes检查当前请求的完整 URL 字符串中‌是否包含‌这个白名单路径片段
 }
 
 // 创建 一个独立的axios 实例
@@ -32,33 +43,28 @@ axiosRetry(instance, {
 
 // 请求拦截器
 instance.interceptors.request.use((config) => {
-  // 阶段3接入token，这里先占位。
+  const token = getToken();
+  if (token !== null) {
+    config.headers = config.headers ?? {}; //Axios 的 config 对象在某些极端情况或自定义配置下，headers 属性可能是 undefined 或 null
+    // 添加 token 到请求头
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 
 // 响应拦截器
 instance.interceptors.response.use(
-  (response) => {
-    const body = response.data as ApiResponse;
-
-    if (
-      body &&
-      typeof body.code === "number" &&
-      body.code !== 0 &&
-      body.code < 400
-    ) {
-      // 业务层错误（非0），统一提示
-      ElMessage.error(body.msg || "请求失败");
-      return Promise.reject(new Error(body.msg));
-    }
-
-    return response;
-  },
+  (resp) => resp,
   (err) => {
     const status = err.response?.status;
+    const url = err.config?.url;
     const msg = err.response?.data?.msg ?? err.message ?? "网络错误";
 
-    if (status === 401) {
+    if (status === 401 && !isAuthFree(url)) {
+      clearToken();
+      if (!location.pathname.startsWith("/login")) {
+        location.href = "/login";
+      }
       ElMessage.error("登录已过期，请重新登录");
       // 跳转登录页
     } else {

@@ -4,7 +4,15 @@ import {
   type RouteRecordRaw,
 } from "vue-router";
 
+import { useUserStore } from "@/stores/user";
+
 const routes: RouteRecordRaw[] = [
+  {
+    path: "/login",
+    name: "login",
+    component: () => import("@/views/loginView.vue"),
+    meta: { title: "登录", public: true },
+  },
   {
     path: "/",
     component: () => import("@/layouts/DefaultLayout.vue"),
@@ -27,6 +35,28 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+});
+
+// 添加路由拦截器
+router.beforeEach(async (to) => {
+  const userStore = useUserStore();
+
+  if (to.meta.public) return true;
+
+  if (!userStore.isLoggedIn) {
+    return { path: "/login", query: { redirect: to.fullPath } };
+  }
+
+  if (userStore.user === null) {
+    try {
+      await userStore.fetchMe();
+    } catch {
+      userStore.logout();
+      return { path: "/login" };
+    }
+  }
+
+  return true;
 });
 
 router.afterEach((to) => {

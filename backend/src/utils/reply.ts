@@ -4,12 +4,12 @@ import { string } from "zod";
 export function ok<T>(reply: FastifyReply, data: T, msg = "ok") {
   return reply.send({
     code: 0,
-    msg,
     data,
+    msg,
   });
 }
 
-export function fail(reply: FastifyReply, code: number, msg = string) {
+export function fail(reply: FastifyReply, code: number, msg: string) {
   return reply.status(code).send({
     code,
     msg,

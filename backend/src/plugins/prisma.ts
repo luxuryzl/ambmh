@@ -5,6 +5,8 @@ import { env } from "../utils/env.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// 向现有的 fastify 模块的类型定义中“注入”新的属性‌，以便 TypeScript 编译器能够识别你动态添加到 Fastify 实例上的自定义属性
+// 在运行时通过 app.decorate('prisma', prismaClient) 或其他方式实际挂载该对象
 declare module "fastify" {
   interface FastifyInstance {
     prisma: PrismaClient;
@@ -40,6 +42,8 @@ export default fp(
       throw e;
     }
 
+    //Prisma‌：通常没有官方的“Fastify Prisma 插件”来自动处理连接池和生命周期，所以我们需要手动 app.decorate('prisma', prismaClient)。
+    //‌JWT‌：有官方维护的 @fastify/jwt 插件，它封装了所有逻辑，所以用 register
     app.decorate("prisma", prisma);
 
     // 钩子保证进程退出时正确释放连接
