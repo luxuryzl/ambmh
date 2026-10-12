@@ -45,7 +45,15 @@
         style="margin-top: 12px"
       >
         <el-table-column prop="code" label="代码" width="120" />
-        <el-table-column prop="name" label="名称" min-width="140" />
+        <el-table-column prop="name" label="名称" min-width="140">
+          <template #default="{ row }">
+            <el-link
+              type="primary"
+              @click="$router.push(`/stocks/${row.id}`)"
+              >{{ row.name }}</el-link
+            >
+          </template>
+        </el-table-column>
         <el-table-column prop="market" label="市场" width="100">
           <template #default="{ row }">
             <el-tag size="small">{{ row.market }}</el-tag>

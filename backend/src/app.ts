@@ -21,8 +21,10 @@ import dbRoutes from "./routes/db.js";
 // 添加authRoutes
 import authRoutes from "./routes/auth.js";
 // 添加stockRoutes
-import stockRoutes from "./routes/stock.js";
-//
+import stockRoutes from "./routes/stocks.js";
+// 添加quoteRoutes
+import quoteRoutes from "./routes/quotes.js";
+
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
     // 日志的核心配置（如输出格式、级别阈值等）
@@ -95,6 +97,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await v1.register(dbRoutes);
       await v1.register(authRoutes);
       await v1.register(stockRoutes);
+      await v1.register(quoteRoutes);
     },
     { prefix: "/api/v1" },
   );

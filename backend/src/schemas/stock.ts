@@ -1,3 +1,12 @@
+/**
+ * JSON Schema‌ 是一种‌数据格式‌，用于跨语言通信（如 OpenAPI/Swagger 文档）
+ * 声明"出去的"（response）,Fastify 的 response schema 只认 JSON Schema
+ * Zod校验“进来的”，他们两个负责一进一出，各司其职。
+ * 定义API返回给前端的字段和类型
+ * 前端 TS 接口（api/stock.ts 里的 Stock）和它们一一对应
+ * 它是 Fastify response schema 的源，决定"哪些字段会出现在响应里"
+ */
+
 export const StockData = {
   type: "object",
   properties: {
