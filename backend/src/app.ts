@@ -18,9 +18,10 @@ import healthRoutes from "./routes/health.js";
 import pingRoutes from "./routes/ping.js";
 // 添加dbRoutes
 import dbRoutes from "./routes/db.js";
-// 浅咖authRoutes
+// 添加authRoutes
 import authRoutes from "./routes/auth.js";
-
+// 添加stockRoutes
+import stockRoutes from "./routes/stock.js";
 //
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
@@ -93,6 +94,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await v1.register(pingRoutes);
       await v1.register(dbRoutes);
       await v1.register(authRoutes);
+      await v1.register(stockRoutes);
     },
     { prefix: "/api/v1" },
   );

@@ -10,7 +10,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/login",
     name: "login",
-    component: () => import("@/views/loginView.vue"),
+    component: () => import("@/views/LoginView.vue"),
     meta: { title: "登录", public: true },
   },
   {
@@ -22,6 +22,12 @@ const routes: RouteRecordRaw[] = [
         name: "dashboard",
         component: () => import("@/views/DashboardView.vue"),
         meta: { title: "驾驶舱" },
+      },
+      {
+        path: "/stocks",
+        name: "stocks",
+        component: () => import("@/views/StockListView.vue"),
+        meta: { title: "股票管理" },
       },
     ],
   },

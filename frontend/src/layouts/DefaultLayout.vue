@@ -51,6 +51,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   Monitor,
+  Files,
   DataLine,
   TrendCharts,
   Notebook,
@@ -65,7 +66,10 @@ const router = useRouter();
 const userStore = useUserStore();
 const activeMenu = computed(() => route.path);
 
-const menus = [{ path: "/", title: "驾驶舱", icon: Monitor }];
+const menus = [
+  { path: "/", title: "驾驶舱", icon: Monitor },
+  { path: "/stocks", title: "股票管理", icon: Files },
+];
 
 const displayName = computed(
   () => userStore.user?.nickname ?? userStore.user?.username ?? "未登录",
