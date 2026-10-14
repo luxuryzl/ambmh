@@ -16,7 +16,6 @@
           >
             批量录入
           </el-button>
-          <el-button :icon="Plus" @click="openSingle">单条录入</el-button>
         </div>
       </template>
 
@@ -47,8 +46,9 @@
         >
           重置
         </el-button>
+        <el-button :icon="Plus" @click="openSingle">单条录入</el-button>
       </div>
-
+      <!-- 日数据显示列表 -->
       <el-table :data="quoteStore.list" v-loading="quoteStore.loading" stripe>
         <el-table-column label="日期" width="120">
           <template #default="{ row }">{{ row.date.slice(0, 10) }}</template>
@@ -57,9 +57,14 @@
         <el-table-column prop="high" label="最高" width="100" />
         <el-table-column prop="low" label="最低" width="100" />
         <el-table-column prop="close" label="收盘" width="100" />
-        <el-table-column label="成交量" width="140">
+        <el-table-column label="成交量WS" width="100">
           <template #default="{ row }">{{
-            row.volume.toLocaleString()
+            row.volume != null ? row.volume.toLocaleString() : "—"
+          }}</template>
+        </el-table-column>
+        <el-table-column label="成交额Y" width="100">
+          <template #default="{ row }">{{
+            row.amount != null ? row.amount.toLocaleString() : "—"
           }}</template>
         </el-table-column>
         <el-table-column label="涨跌幅" width="100">
@@ -73,7 +78,12 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column label="换手率" width="100">
+          <template #default="{ row }">{{
+            row.turnover != null ? row.amount.toLocaleString() : "—"
+          }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openEdit(row)"
               >编辑</el-button
@@ -97,6 +107,7 @@
       />
     </el-card>
 
+    <!-- 解析数据 显示窗口 -->
     <el-dialog v-model="importVisible" title="批量录入日线" width="720px">
       <el-alert type="info" :closable="false" style="margin-bottom: 12px">
         每行一条，列顺序：<b
@@ -169,7 +180,8 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="singleVisible" title="单条录入" width="520px">
+    <!-- 单条录入的表单 显示窗口 -->
+    <el-dialog v-model="singleVisible" :title="dialogTitle" width="520px">
       <el-form
         ref="singleFormRef"
         :model="singleForm"
@@ -251,6 +263,14 @@
             style="width: 100%"
           />
         </el-form-item>
+        <el-form-item label="换手率(%)">
+          <el-input-number
+            v-model="singleForm.turnover"
+            :precision="2"
+            :step="0.01"
+            style="width: 100%"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="singleVisible = false">取消</el-button>
@@ -268,18 +288,29 @@
 <script setup lang="ts">
 import { computed, ref, reactive, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
-import { ElMessage, ElMessageBox, type FormInstance } from "element-plus";
+import {
+  dayjs,
+  ElMessage,
+  ElMessageBox,
+  type FormInstance,
+} from "element-plus";
 import { Upload, Delete, Refresh, Plus } from "@element-plus/icons-vue";
 import { useStockStore } from "@/stores/stock";
 import { useQuoteStore } from "@/stores/quote";
 import { stockApi } from "@/api/stock";
-import { quoteApi } from "@/api/quote";
+import { quoteApi, type DailyQuote, type QuoteInput } from "@/api/quote";
 import { parseQuoteText, type ParsedRow } from "@/utils/parseQuoteText";
 import type { Stock } from "@/api/stock";
 
 const route = useRoute();
 const stockStore = useStockStore();
 const quoteStore = useQuoteStore();
+
+const dialogMode = ref<"create" | "edit">("create");
+const dialogTitle = computed(() => {
+  return dialogMode.value === "create" ? "单条录入" : "编辑";
+});
+const editingId = ref<string | null>(null);
 
 // 从路由参数中安全地提取 id，并确保只有当 id 是一个非空字符串时才返回该值，否则返回 null
 const stockId = computed<string | null>(() => {
@@ -343,6 +374,7 @@ const singleForm = reactive({
   volume: 0,
   amount: undefined as number | undefined,
   pctChange: undefined as number | undefined,
+  turnover: undefined as number | undefined,
 });
 
 const singleRules = {
@@ -366,6 +398,7 @@ function openSingle() {
     volume: 0,
     amount: undefined,
     pctChange: undefined,
+    turnover: undefined,
   });
   singleVisible.value = true;
 }
@@ -389,6 +422,7 @@ async function onSubmitSingle() {
       volume: singleForm.volume,
       amount: singleForm.amount,
       pctChange: singleForm.pctChange,
+      turnover: singleForm.turnover,
     });
     ElMessage.success("录入成功");
     singleVisible.value = false;
@@ -399,8 +433,21 @@ async function onSubmitSingle() {
 }
 
 // 单条编辑
-function openEdit(row: { id: string }) {
-  return;
+function openEdit(row: QuoteInput) {
+  dialogMode.value = "edit";
+  const safeDate = row.date ? dayjs(row.date).format("YYYY-MM-DD") : "";
+  Object.assign(singleForm, {
+    date: safeDate,
+    open: row.open,
+    high: row.high,
+    low: row.low,
+    close: row.close,
+    volume: row.volume ?? 0,
+    amount: row.amount ?? 0,
+    pctChange: row.pctChange ?? 0,
+    turnover: row.turnover ?? 0,
+  });
+  singleVisible.value = true;
 }
 
 // 批量录入
