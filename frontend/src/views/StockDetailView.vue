@@ -47,6 +47,12 @@
           重置
         </el-button>
         <el-button :icon="Plus" @click="openSingle">单条录入</el-button>
+        <el-button
+          :icon="TrendCharts"
+          @click="$router.push(`/stocks/${stockId}/fund-flow`)"
+        >
+          资金流
+        </el-button>
       </div>
       <!-- 日数据显示列表 -->
       <el-table :data="quoteStore.list" v-loading="quoteStore.loading" stripe>
@@ -301,6 +307,7 @@ import { stockApi } from "@/api/stock";
 import { quoteApi, type DailyQuote, type QuoteInput } from "@/api/quote";
 import { parseQuoteText, type ParsedRow } from "@/utils/parseQuoteText";
 import type { Stock } from "@/api/stock";
+import { TrendCharts } from "@element-plus/icons-vue";
 
 const route = useRoute();
 const stockStore = useStockStore();

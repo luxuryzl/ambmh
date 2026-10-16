@@ -134,7 +134,7 @@ const quoteRoutes: FastifyPluginAsync = async (app) => {
           turnover: parsed.data.turnover ?? null,
         },
       });
-
+      // toQuoteDto(quote)就是把查到的结果转码成DTO
       return ok(reply, toQuoteDto(quote), "录入成功");
     },
   );

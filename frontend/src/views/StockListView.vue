@@ -74,7 +74,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :icon="Edit" @click="openEdit(row)"
               >编辑</el-button
@@ -82,6 +82,13 @@
             <el-button link type="danger" :icon="Delete" @click="onDelete(row)"
               >删除</el-button
             >
+            <el-button
+              link
+              type="primary"
+              @click="$router.push(`/stocks/${row.id}/fund-flow`)"
+            >
+              资金流
+            </el-button>
           </template>
         </el-table-column>
       </el-table>

@@ -24,6 +24,8 @@ import authRoutes from "./routes/auth.js";
 import stockRoutes from "./routes/stocks.js";
 // 添加quoteRoutes
 import quoteRoutes from "./routes/quotes.js";
+// 添加fundFlowRoutes
+import fundFlowRoutes from "./routes/fund-flow.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
@@ -98,6 +100,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await v1.register(authRoutes);
       await v1.register(stockRoutes);
       await v1.register(quoteRoutes);
+      await v1.register(fundFlowRoutes);
     },
     { prefix: "/api/v1" },
   );

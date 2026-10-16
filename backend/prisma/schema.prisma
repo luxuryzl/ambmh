@@ -73,11 +73,32 @@ model DailyQuote {
 // ============ 阶段 2 只建上面三张表；下面为占位引用，先声明空模型，
 //             真实字段在阶段 6+ 补齐。可以让 schema 通过校验。
 model FundFlow {
-  id      String   @id @default(cuid())
-  stockId String
-  date    DateTime
-  stock   Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  stockId       String
+  date          DateTime
+
+  // 主力净额（元）
+  mainNet       Float    @default(0)
+  mainNet5d     Float    @default(0)     // 5 日主力净额
+  mainNet10d    Float    @default(0)     // 10 日主力净额（可选）
+
+  // 分层净额（元）
+  superLargeNet Float    @default(0)     // 超大单净额
+  largeNet      Float    @default(0)     // 大单净额
+  mediumNet     Float    @default(0)     // 中单净额
+  smallNet      Float    @default(0)     // 小单净额
+
+  // 比例（%）
+  mainNetRatio  Float?                    // 主力净额占成交额比
+  turnover      Float?                    // 换手率
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
   @@unique([stockId, date])
+  @@index([date])
   @@map("fund_flows")
 }
 

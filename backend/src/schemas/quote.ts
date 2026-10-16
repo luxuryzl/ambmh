@@ -1,5 +1,7 @@
 /**
+ * Fastify 的 response schema
  * JSON Schema‌ 是一种‌数据格式‌，用于跨语言通信（如 OpenAPI/Swagger 文档）
+ * JSON的原生类型 只有：string、number、boolean、null、object、array。都是小写的
  * 定义API返回给前端的字段和类型
  * 前端 TS 接口（api/quote.ts 里的 DailyQuote）和它们一一对应
  * 它是 Fastify response schema 的源，决定"哪些字段会出现在响应里"
