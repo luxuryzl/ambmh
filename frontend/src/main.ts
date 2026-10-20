@@ -6,6 +6,8 @@ import zhCn from "element-plus/es/locale/lang/zh-cn";
 
 import App from "./App.vue";
 import router from "./router/index.ts";
+// 导入图表
+import "./plugins/echarts.ts";
 
 const app = createApp(App);
 

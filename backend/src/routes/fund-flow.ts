@@ -356,8 +356,19 @@ const fundFlowRoutes: FastifyPluginAsync = async (app) => {
               latestDate: { type: ["string", "null"] },
               latestMainNet: { type: ["number", "null"] },
               latestMainNet5d: { type: ["number", "null"] },
-              consecutivenInflowDays: { type: "number" },
+              consecutiveInflowDays: { type: "number" },
+              consecutiveOutflowDays: { type: "number" },
+              inflowScore: { type: "number" },
+              trend: { type: "string" },
+              recent5dNet: { type: "number" },
             },
+            required: [
+              "consecutiveInflowDays",
+              "consecutiveOutflowDays",
+              "inflowScore",
+              "trend",
+              "recent5dNet",
+            ],
           }),
         },
       },
@@ -387,7 +398,7 @@ const fundFlowRoutes: FastifyPluginAsync = async (app) => {
 
       const latest = recent[0]!;
 
-      // 连续净注入/流出天数
+      // 连续净流入/流出天数
       let inflowDays = 0;
       for (const f of recent) {
         if (f.mainNet > 0) inflowDays += 1;

@@ -3,87 +3,28 @@
     <el-card shadow="never">
       <template #header>
         <div class="header">
-          <div>
+          <div class="header-left">
             <span class="title">{{ title }}</span>
             <el-tag v-if="stock" size="small" style="margin-left: 8px">{{
               stock.market
             }}</el-tag>
           </div>
-          <div>
-            <el-button :icon="Plus" @click="openSingle">单条录入</el-button>
+          <div class="header-right">
             <el-button type="primary" :icon="Upload" @click="openImport"
               >批量录入</el-button
+            >
+            <el-button type="success" :icon="Plus" @click="openSingle"
+              >单条录入</el-button
+            >
+            <el-button
+              type="danger"
+              :icon="View"
+              @click="$router.push(`/stocks/${stockId}`)"
+              >详情页</el-button
             >
           </div>
         </div>
       </template>
-
-      <!-- 分析卡片 -->
-      <div v-if="flowStore.analysis" class="analysis">
-        <el-statistic
-          title="最新主力净额"
-          :value="flowStore.analysis.latestMainNet ?? 0"
-        >
-          <template #suffix>
-            <span :class="amountClass(flowStore.analysis.latestMainNet)">
-              {{ formatAmount(flowStore.analysis.latestMainNet) }}
-            </span>
-          </template>
-        </el-statistic>
-        <el-statistic
-          title="5 日主力净额"
-          :value="flowStore.analysis.recent5dNet"
-        >
-          <template #suffix>
-            <span :class="amountClass(flowStore.analysis.recent5dNet)">
-              {{ formatAmount(flowStore.analysis.recent5dNet) }}
-            </span>
-          </template>
-        </el-statistic>
-        <el-statistic
-          title="连续净流入"
-          :value="flowStore.analysis.consecutiveInflowDays"
-          suffix="天"
-        />
-        <el-statistic
-          title="连续净流出"
-          :value="flowStore.analysis.consecutiveOutflowDays"
-          suffix="天"
-        />
-        <div class="score">
-          <div class="score-label">资金流强度</div>
-          <el-progress
-            :percentage="flowStore.analysis.inflowScore"
-            :status="
-              flowStore.analysis.trend === 'bullish'
-                ? 'success'
-                : flowStore.analysis.trend === 'bearish'
-                  ? 'exception'
-                  : undefined
-            "
-            :stroke-width="14"
-          />
-          <el-tag
-            :type="
-              flowStore.analysis.trend === 'bullish'
-                ? 'danger'
-                : flowStore.analysis.trend === 'bearish'
-                  ? 'success'
-                  : 'info'
-            "
-            size="small"
-            style="margin-top: 6px"
-          >
-            {{
-              flowStore.analysis.trend === "bullish"
-                ? "主力持续流入"
-                : flowStore.analysis.trend === "bearish"
-                  ? "主力持续流出"
-                  : "中性"
-            }}
-          </el-tag>
-        </div>
-      </div>
 
       <!-- 工具栏 -->
       <div class="toolbar">
@@ -113,6 +54,107 @@
           >重置</el-button
         >
       </div>
+
+      <!-- 分析卡片 -->
+      <div v-if="flowStore.analysis" class="analysis">
+        <div class="stat-item">
+          <div class="stat-title">最新主力净额</div>
+          <div
+            :class="[
+              'stat-value',
+              amountClass(flowStore.analysis.latestMainNet),
+            ]"
+          >
+            {{ formatAmount(flowStore.analysis.latestMainNet) }}
+          </div>
+        </div>
+
+        <div class="stat-item">
+          <div class="stat-title">最新5日主力</div>
+          <div
+            :class="[
+              'stat-value',
+              amountClass(flowStore.analysis.latestMainNet5d),
+            ]"
+          >
+            {{ formatAmount(flowStore.analysis.latestMainNet5d) }}
+          </div>
+        </div>
+
+        <div class="stat-item">
+          <div class="stat-title">连续净流入</div>
+          <div class="stat-value text-blue">
+            {{ flowStore.analysis.consecutiveInflowDays ?? 0 }}
+            <span class="unit">天</span>
+          </div>
+        </div>
+
+        <div class="stat-item">
+          <div class="stat-title">连续净流出</div>
+          <div class="stat-value text-green">
+            {{ flowStore.analysis.consecutiveOutflowDays ?? 0 }}
+            <span class="unit">天</span>
+          </div>
+        </div>
+
+        <div class="score">
+          <div class="score-label">资金流强度</div>
+          <el-progress
+            :percentage="flowStore.analysis.inflowScore ?? 0"
+            :status="
+              flowStore.analysis.trend === 'bullish'
+                ? 'success'
+                : flowStore.analysis.trend === 'bearish'
+                  ? 'exception'
+                  : undefined
+            "
+            :stroke-width="12"
+            :show-text="false"
+          />
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              margin-top: 6px;
+            "
+          >
+            <el-tag
+              :type="
+                flowStore.analysis.trend === 'bullish'
+                  ? 'danger'
+                  : flowStore.analysis.trend === 'bearish'
+                    ? 'success'
+                    : 'info'
+              "
+              size="small"
+              effect="dark"
+            >
+              {{
+                flowStore.analysis.trend === "bullish"
+                  ? "主力流入"
+                  : flowStore.analysis.trend === "bearish"
+                    ? "主力流出"
+                    : "中性"
+              }}
+            </el-tag>
+            <span style="font-size: 12px; color: #666"
+              >{{ flowStore.analysis.inflowScore ?? 0 }} 分</span
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- 加图表 -->
+      <el-card shadow="never" style="margin-bottom: 16px">
+        <template #header>
+          <span>主力净额（近 60 个交易日）</span>
+        </template>
+        <BaseChart
+          :option="flowOption"
+          height="360px"
+          :loading="flowChartLoading"
+        />
+      </el-card>
 
       <!-- 数据表格 -->
       <el-table :data="flowStore.list" v-loading="flowStore.loading" stripe>
@@ -161,8 +203,11 @@
             }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" :icon="Edit" @click="openEdit(row)"
+              >编辑</el-button
+            >
             <el-button link type="danger" :icon="Delete" @click="onDelete(row)"
               >删除</el-button
             >
@@ -193,7 +238,7 @@
       />
     </el-card>
 
-    <!-- 批量录入弹窗 -->
+    <!-- 批量录入 显示窗口 -->
     <el-dialog v-model="importVisible" title="批量录入资金流" width="760px">
       <el-alert type="info" :closable="false" style="margin-bottom: 12px">
         每行一条，列顺序：<b
@@ -267,8 +312,8 @@
       </template>
     </el-dialog>
 
-    <!-- 单条录入弹窗 -->
-    <el-dialog v-model="singleVisible" title="单条录入资金流" width="520px">
+    <!-- 单条录入 显示窗口 -->
+    <el-dialog v-model="singleVisible" :title="dialogTitle" width="520px">
       <el-form
         ref="singleFormRef"
         :model="singleForm"
@@ -285,46 +330,131 @@
           />
         </el-form-item>
         <el-form-item label="主力净额" prop="mainNet">
-          <el-input-number
+          <!-- 左侧：数值输入框 -->
+          <el-input
             v-model="singleForm.mainNet"
-            :step="1000000"
-            style="width: 100%"
-          />
+            type="number"
+            placeholder="请输入主力净额"
+            class="input-with-select"
+          >
+            <!-- 右侧：单位下拉选择 -->
+            <template #append>
+              <el-select
+                v-model="singleForm.mainNetUnit"
+                placeholder="单位"
+                style="width: 90px"
+              >
+                <el-option label="亿元" value="YI" />
+                <el-option label="万元" value="WAN" />
+                <el-option label="元" value="CNY" />
+              </el-select>
+            </template>
+          </el-input>
         </el-form-item>
         <el-form-item label="5日主力">
-          <el-input-number
+          <el-input
             v-model="singleForm.mainNet5d"
-            :step="1000000"
-            style="width: 100%"
-          />
+            type="number"
+            placeholder="请输入5日主力净额"
+            class="input-with-select"
+          >
+            <!-- 右侧：单位下拉选择 -->
+            <template #append>
+              <el-select
+                v-model="singleForm.mainNet5dUnit"
+                placeholder="单位"
+                style="width: 90px"
+              >
+                <el-option label="亿元" value="YI" />
+                <el-option label="万元" value="WAN" />
+                <el-option label="元" value="CNY" />
+              </el-select>
+            </template>
+          </el-input>
         </el-form-item>
         <el-form-item label="超大单">
-          <el-input-number
+          <el-input
             v-model="singleForm.superLargeNet"
-            :step="1000000"
-            style="width: 100%"
-          />
+            type="number"
+            placeholder="请输入超大单金额"
+            class="input-with-select"
+          >
+            <!-- 右侧：单位下拉选择 -->
+            <template #append>
+              <el-select
+                v-model="singleForm.superLargeNetUnit"
+                placeholder="单位"
+                style="width: 90px"
+              >
+                <el-option label="亿元" value="YI" />
+                <el-option label="万元" value="WAN" />
+                <el-option label="元" value="CNY" />
+              </el-select>
+            </template>
+          </el-input>
         </el-form-item>
         <el-form-item label="大单">
-          <el-input-number
+          <el-input
             v-model="singleForm.largeNet"
-            :step="1000000"
-            style="width: 100%"
-          />
+            type="number"
+            placeholder="请输入大单金额"
+            class="input-with-select"
+          >
+            <!-- 右侧：单位下拉选择 -->
+            <template #append>
+              <el-select
+                v-model="singleForm.largeNetUnit"
+                placeholder="单位"
+                style="width: 90px"
+              >
+                <el-option label="亿元" value="YI" />
+                <el-option label="万元" value="WAN" />
+                <el-option label="元" value="CNY" />
+              </el-select>
+            </template>
+          </el-input>
         </el-form-item>
         <el-form-item label="中单">
-          <el-input-number
+          <el-input
             v-model="singleForm.mediumNet"
-            :step="1000000"
-            style="width: 100%"
-          />
+            type="number"
+            placeholder="请输入中单金额"
+            class="input-with-select"
+          >
+            <!-- 右侧：单位下拉选择 -->
+            <template #append>
+              <el-select
+                v-model="singleForm.mediumNetUnit"
+                placeholder="单位"
+                style="width: 90px"
+              >
+                <el-option label="亿元" value="YI" />
+                <el-option label="万元" value="WAN" />
+                <el-option label="元" value="CNY" />
+              </el-select>
+            </template>
+          </el-input>
         </el-form-item>
         <el-form-item label="小单">
-          <el-input-number
+          <el-input
             v-model="singleForm.smallNet"
-            :step="1000000"
-            style="width: 100%"
-          />
+            type="number"
+            placeholder="请输入中单金额"
+            class="input-with-select"
+          >
+            <!-- 右侧：单位下拉选择 -->
+            <template #append>
+              <el-select
+                v-model="singleForm.smallNetUnit"
+                placeholder="单位"
+                style="width: 90px"
+              >
+                <el-option label="亿元" value="YI" />
+                <el-option label="万元" value="WAN" />
+                <el-option label="元" value="CNY" />
+              </el-select>
+            </template>
+          </el-input>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -343,8 +473,20 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, reactive } from "vue";
 import { useRoute } from "vue-router";
-import { ElMessage, ElMessageBox, type FormInstance } from "element-plus";
-import { Plus, Upload, Delete, Refresh } from "@element-plus/icons-vue";
+import {
+  dayjs,
+  ElMessage,
+  ElMessageBox,
+  type FormInstance,
+} from "element-plus";
+import {
+  Plus,
+  Upload,
+  Delete,
+  Refresh,
+  View,
+  Edit,
+} from "@element-plus/icons-vue";
 import { useFundFlowStore } from "@/stores/fundFlow";
 import { useStockStore } from "@/stores/stock";
 import { stockApi } from "@/api/stock";
@@ -353,6 +495,13 @@ import {
   parseFundFlowText,
   type ParsedFlowRow,
 } from "@/utils/parseFundFlowText";
+
+// 加图表
+import { computed as vueComputed } from "vue";
+import type { EChartsOption } from "echarts";
+import BaseChart from "@/components/charts/BaseChart.vue";
+import { fundFlowApi } from "@/api/fund-flow";
+import type { FundFlow, FundFlowInput } from "@/api/fund-flow";
 
 const route = useRoute();
 const flowStore = useFundFlowStore();
@@ -364,6 +513,10 @@ const stockId = computed<string | null>(() => {
 const stock = ref<Stock | null>(null);
 const range = reactive({ from: "", to: "" });
 
+const dialogMode = ref<"create" | "edit">("create");
+const dialogTitle = computed(() => {
+  return dialogMode.value === "create" ? "单条录入" : "编辑";
+});
 async function loadStock() {
   if (stockId.value === null) return;
   stock.value = await stockApi.detail(stockId.value);
@@ -384,6 +537,7 @@ async function loadAll() {
 onMounted(async () => {
   await loadStock();
   await loadAll();
+  void loadFlowChart();
 });
 
 watch(stockId, async () => {
@@ -453,34 +607,60 @@ async function onSubmitImport() {
 }
 
 // ---------- 单条录入 ----------
+type AmountUnit = "CNY" | "WAN" | "YI";
 const singleVisible = ref(false);
 const singleFormRef = ref<FormInstance>();
 const singleSubmitting = ref(false);
 const singleForm = reactive({
   date: "",
-  mainNet: 0,
-  mainNet5d: 0,
-  superLargeNet: 0,
-  largeNet: 0,
-  mediumNet: 0,
-  smallNet: 0,
+  mainNet: undefined as number | undefined,
+  mainNetUnit: "WAN" as AmountUnit, // 默认选万元
+  mainNet5d: undefined as number | undefined,
+  mainNet5dUnit: "YI" as AmountUnit,
+  superLargeNet: undefined as number | undefined,
+  superLargeNetUnit: "WAN" as AmountUnit,
+  largeNet: undefined as number | undefined,
+  largeNetUnit: "WAN" as AmountUnit,
+  mediumNet: undefined as number | undefined,
+  mediumNetUnit: "WAN" as AmountUnit,
+  smallNet: undefined as number | undefined,
+  smallNetUnit: "WAN" as AmountUnit,
 });
+
 const singleRules = {
   date: [{ required: true, message: "请选择日期", trigger: "change" }],
-  mainNet: [
-    { required: true, type: "number", message: "必填", trigger: "blur" },
-  ],
+  mainNet: [{ required: true, message: "必填", trigger: "blur" }],
 };
 
+function converToYuan(value: number | undefined, unit: AmountUnit): number {
+  if (value === undefined || isNaN(value)) return 0;
+
+  switch (unit) {
+    case "YI":
+      return value * 100000000;
+    case "WAN":
+      return value * 10000;
+    case "CNY":
+    default:
+      return value;
+  }
+}
 function openSingle() {
+  dialogMode.value = "create";
   Object.assign(singleForm, {
     date: "",
-    mainNet: 0,
-    mainNet5d: 0,
-    superLargeNet: 0,
-    largeNet: 0,
-    mediumNet: 0,
-    smallNet: 0,
+    mainNet: undefined,
+    mainNetUnit: "WAN",
+    mainNet5d: undefined,
+    mainNet5dUnit: "YI",
+    superLargeNet: undefined,
+    superLargeNetUnit: "WAN",
+    largeNet: undefined,
+    largeNetUnit: "WAN",
+    mediumNet: undefined,
+    mediumNetUnit: "WAN",
+    smallNet: undefined,
+    smallNetUnit: "WAN",
   });
   singleVisible.value = true;
 }
@@ -492,8 +672,22 @@ async function onSubmitSingle() {
   if (!valid) return;
 
   singleSubmitting.value = true;
+
   try {
-    await flowStore.create(stockId.value, { ...singleForm });
+    // 在提交前，将各个字段统一转换为“元”
+    const payload = {
+      date: singleForm.date,
+      mainNet: converToYuan(singleForm.mainNet, singleForm.mainNetUnit),
+      mainNet5d: converToYuan(singleForm.mainNet5d, singleForm.mainNet5dUnit),
+      superLargeNet: converToYuan(
+        singleForm.superLargeNet,
+        singleForm.superLargeNetUnit,
+      ),
+      largeNet: converToYuan(singleForm.largeNet, singleForm.largeNetUnit),
+      mediumNet: converToYuan(singleForm.mediumNet, singleForm.mediumNetUnit),
+      smallNet: converToYuan(singleForm.smallNet, singleForm.smallNetUnit),
+    };
+    await flowStore.create(stockId.value, payload);
     ElMessage.success("录入成功");
     singleVisible.value = false;
     await loadAll();
@@ -502,6 +696,47 @@ async function onSubmitSingle() {
   }
 }
 
+function openEdit(row: FundFlowInput) {
+  dialogMode.value = "edit";
+  const safeDate = row.date ? dayjs(row.date).format("YYYY-MM-DD") : "";
+
+  // 辅助函数，把数值自动转成最合适的单位
+  const autoUnit = (
+    val: number | null | undefined,
+  ): { value: number; unit: AmountUnit } => {
+    if (!val) return { value: 0, unit: "CNY" };
+    const abs = Math.abs(val);
+    if (abs >= 1e8)
+      return { value: Number((val / 1e8).toFixed(4)), unit: "YI" };
+    if (abs >= 1e4)
+      return { value: Number((val / 1e4).toFixed(4)), unit: "WAN" };
+    return { value: val, unit: "CNY" };
+  };
+  const mainNetInit = autoUnit(row.mainNet);
+  const mainNet5dInit = autoUnit(row.mainNet5d);
+  const superLargeNetInit = autoUnit(row.superLargeNet);
+  const largeNetInit = autoUnit(row.largeNet);
+  const mediumNetInit = autoUnit(row.mediumNet);
+  const smallNetInit = autoUnit(row.smallNet);
+  Object.assign(singleForm, {
+    date: safeDate,
+    mainNet: mainNetInit.value,
+    mainNetUnit: mainNetInit.unit,
+    mainNet5d: mainNet5dInit.value,
+    mainNet5dUnit: mainNet5dInit.unit,
+    superLargeNet: superLargeNetInit.value,
+    superLargeNetUnit: superLargeNetInit.unit,
+    largeNet: largeNetInit.value,
+    largeNetUnit: largeNetInit.unit,
+    mediumNet: mediumNetInit.value,
+    mediumNetUnit: mediumNetInit.unit,
+    smallNet: smallNetInit.value,
+    smallNetUnit: smallNetInit.unit,
+    mainNetRatio: row.mainNetRatio ?? null,
+    turnover: row.turnover ?? null,
+  });
+  singleVisible.value = true;
+}
 async function onDelete(row: { id: string }) {
   if (stockId.value === null) return;
   try {
@@ -520,6 +755,88 @@ const title = computed(() => {
   if (!stock.value) return "资金流";
   return `${stock.value.name}（${stock.value.code}）资金流`;
 });
+
+// 加图表
+const flowChartData = ref<FundFlow[]>([]);
+const flowChartLoading = ref(false);
+
+async function loadFlowChart() {
+  if (stockId.value === null) return;
+  flowChartLoading.value = true;
+  try {
+    flowChartData.value = await fundFlowApi.latest(stockId.value, 60);
+  } finally {
+    flowChartLoading.value = false;
+  }
+}
+
+const flowOption = vueComputed<EChartsOption | null>(() => {
+  if (flowChartData.value.length === 0) return null;
+
+  // 如果数据少于 20 条，就不显示底部的滑动条
+  const showZoom = flowChartData.value.length > 20;
+  const dates = flowChartData.value.map((f) => f.date.slice(0, 10));
+  const mainNet = flowChartData.value.map((f) => f.mainNet);
+  const mainNet5d = flowChartData.value.map((f) => f.mainNet5d);
+
+  return {
+    animation: false,
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      valueFormatter: (value) => {
+        const v = Number(value);
+        if (isNaN(v)) return "—";
+        const abs = Math.abs(v);
+        if (abs >= 1e8) return `${(v / 1e8).toFixed(2)}亿`;
+        if (abs >= 1e4) return `${(v / 1e4).toFixed(2)}万`;
+        return `${v.toFixed(2)}`;
+      },
+    },
+    legend: { data: ["主力净额", "5日主力"], top: 0 },
+    grid: { left: 60, right: 20, top: 30, bottom: 40 },
+    xAxis: {
+      type: "category",
+      data: dates,
+      axisLabel: { rotate: 30 },
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: {
+        formatter: (value: number) => {
+          const abs = Math.abs(value);
+          if (abs >= 1e8) return `${(value / 1e8).toFixed(1)}亿`;
+          if (abs >= 1e4) return `${(value / 1e4).toFixed(0)}万`;
+          return value.toString();
+        },
+      },
+    },
+    dataZoom: showZoom
+      ? [
+          { type: "inside", start: 50, end: 100 },
+          { type: "slider", bottom: 10, start: 50, end: 100 },
+        ]
+      : [],
+    series: [
+      {
+        name: "主力净额",
+        type: "bar",
+        data: mainNet.map((v) => ({
+          value: v,
+          itemStyle: { color: v >= 0 ? "#ef232a" : "#14b143" },
+        })),
+      },
+      {
+        name: "5日主力",
+        type: "line",
+        data: mainNet5d,
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 2 },
+      },
+    ],
+  };
+});
 </script>
 
 <style scoped>
@@ -537,13 +854,49 @@ const title = computed(() => {
 }
 
 .analysis {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr) 1.5fr;
-  gap: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   margin-bottom: 16px;
-  padding: 16px;
+  padding: 20px;
   background: #f8fafc;
   border-radius: 8px;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stat-title {
+  font-size: 13px;
+  color: #64748b;
+}
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: DIN, Arial, sans-serif;
+  line-height: 1;
+}
+.stat-value .unit {
+  font-size: 13px;
+  font-weight: 400;
+  color: #666;
+}
+.text-blue {
+  color: #3b82f6;
+}
+.text-green {
+  color: #10b981;
+}
+.score {
+  flex: 1;
+  max-width: 200px;
+}
+.score-label {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 8px;
 }
 .score {
   display: flex;
