@@ -54,11 +54,24 @@ instance.interceptors.request.use((config) => {
 
 // 响应拦截器
 instance.interceptors.response.use(
-  (resp) => resp,
+  (resp) => {
+    // 业务层错误：http状态码200，但code !==0 的错误
+    const body = resp.data;
+    if (body && typeof body.code === "number" && body.code !== 0) {
+      ElMessage.error(body.msg || "请求失败");
+
+      // 在 Axios 的响应拦截器中，使用 return Promise.reject(...) 的核心目的是‌中断正常的响应处理流程，并将错误状态传递给调用方的 .catch() 或 try...catch 块‌。
+      return Promise.reject(new Error(body.msg));
+    }
+
+    return resp;
+  },
   (err) => {
+    // HTTP层错误：4XX,5XX 或 网络断开
     const status = err.response?.status;
     const url = err.config?.url;
-    const msg = err.response?.data?.msg ?? err.message ?? "网络错误";
+    const msg =
+      err.response?.data?.msg ?? err.message ?? "网络异常，请稍后重试";
 
     if (status === 401 && !isAuthFree(url)) {
       clearToken();
@@ -67,7 +80,8 @@ instance.interceptors.response.use(
       }
       ElMessage.error("登录已过期，请重新登录");
       // 跳转登录页
-    } else {
+    } else if (status !== 400) {
+      // 400参数错误通常需要组件自己处理业务逻辑，其他的全局弹窗
       ElMessage.error(msg);
     }
 

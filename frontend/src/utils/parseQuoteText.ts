@@ -36,7 +36,7 @@ export function parseAmount(s: string): number | null {
   // \s*                  -> 允许数字和单位之间有空格
   // (亿|万|千)?          -> 匹配基础单位（可选）
   // (手|股)?$            -> 匹配尾缀（可选，如“万手”中的“手”）
-  const m = /^(-?\d+(?:\.\d+)?)\s*(亿|万|千)?(?:手|股)?$/.exec(t);
+  const m = /^(-?\d+(?:\.\d+)?)\s*(亿|万|千|手)?(?:手|股)?$/.exec(t);
   if (!m) {
     // 如果正则没匹配上，尝试直接用 Number 转换（比如纯数字）
     const n = Number(t);
@@ -47,9 +47,14 @@ export function parseAmount(s: string): number | null {
   const unit = m[2];
   let multiplier = 1;
 
-  if (unit === "亿") multiplier = 1e8;
-  else if (unit === "万") multiplier = 1e4;
-  else if (unit === "千") multiplier = 1e3;
+  // 这里的单位转换要根据源数据来定
+  if (t.includes("亿")) multiplier = 1e8;
+  else if (t.includes("万手"))
+    multiplier = 1e6; // 1万手 = 1,000,000 股
+  else if (t.includes("万")) multiplier = 1e4;
+  else if (t.includes("手"))
+    multiplier = 100; // 1手 = 100 股
+  else if (t.includes("千")) multiplier = 1e3;
 
   // 计算结果
   const result = num * multiplier;

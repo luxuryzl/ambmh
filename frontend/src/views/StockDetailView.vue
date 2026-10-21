@@ -46,14 +46,22 @@
           value-format="YYYY-MM-DD"
           placeholder="结束日期"
         />
-        <el-button type="primary" @click="loadQuotes">查询</el-button>
+        <el-button
+          type="primary"
+          @click="
+            () => {
+              if (stockId) loadQuotes(stockId, range.from, range.to);
+            }
+          "
+          >查询</el-button
+        >
         <el-button
           :icon="Refresh"
           @click="
             () => {
               range.from = '';
               range.to = '';
-              loadQuotes();
+              if (stockId) loadQuotes(stockId, range.from, range.to);
             }
           "
         >
@@ -72,7 +80,7 @@
         />
       </el-card>
       <!-- 日数据显示列表 -->
-      <el-table :data="quoteStore.list" v-loading="quoteStore.loading" stripe>
+      <el-table :data="quoteStore.list" v-loading="listLoading" stripe>
         <el-table-column label="日期" width="120">
           <template #default="{ row }">{{ row.date.slice(0, 10) }}</template>
         </el-table-column>
@@ -173,8 +181,12 @@
         <el-table-column prop="high" label="最高" width="80" />
         <el-table-column prop="low" label="最低" width="80" />
         <el-table-column prop="close" label="收盘" width="80" />
-        <el-table-column prop="volume" label="成交量" width="110" />
-        <el-table-column prop="amount" label="成交额" width="110" />
+        <el-table-column label="成交量" width="110">
+          <template #default="{ row }">{{ formatVolume(row.volume) }}</template>
+        </el-table-column>
+        <el-table-column label="成交额" width="110">
+          <template #default="{ row }">{{ formatAmount(row.amount) }}</template>
+        </el-table-column>
         <el-table-column prop="pctChange" label="涨幅" width="110" />
         <el-table-column prop="turnover" label="换手率" width="110" />
       </el-table>
@@ -273,6 +285,7 @@
               >
                 <el-option label="万手" value="WAN_SHOU" />
                 <el-option label="手" value="SHOU" />
+                <el-option label="股" value="GU" />
               </el-select>
             </template>
           </el-input>
@@ -350,6 +363,7 @@ import { TrendCharts } from "@element-plus/icons-vue";
 import { computed as vueComputed } from "vue";
 import type { EChartsOption } from "echarts";
 import BaseChart from "@/components/charts/BaseChart.vue";
+import { useRequest } from "@/composables/useRequest";
 
 const route = useRoute();
 const stockStore = useStockStore();
@@ -366,47 +380,78 @@ const stockId = computed<string | null>(() => {
   return typeof id === "string" && id.length > 0 ? id : null;
 });
 
-const stock = ref<Stock | null>(null);
+/* const stock = ref<Stock | null>(null);
+async function loadStock() {
+  if (stockId.value === null) return;
+  stock.value = await stockApi.detail(stockId.value);
+} */
+
+// 用useRequest替换loadStock股票详情
+const { data: stock, run: loadStock } = useRequest(
+  (id: string) => stockStore.fetchDetail(id), //走缓存逻辑
+  { manual: true, initialData: null as Stock | null },
+);
 
 const range = reactive({
   from: "",
   to: "",
 });
-
-async function loadStock() {
-  if (stockId.value === null) return;
-  stock.value = await stockApi.detail(stockId.value);
-}
-
-async function loadQuotes() {
+/* async function loadQuotes() {
   if (stockId.value === null) return;
   await quoteStore.fetchList(
     stockId.value,
     range.from || undefined,
     range.to || undefined,
   );
-}
+} */
+
+// 使用useRequest替换loadQuotes
+// 由于列表需要存分页信息，你依然可以用 store，或者直接用 useRequest
+const { loading: listLoading, run: loadQuotes } = useRequest(
+  (id: string, from?: string, to?: string) =>
+    quoteApi.list({
+      stockId: id,
+      from: from || undefined, //修复空字符串，传undefined
+      to: to || undefined, //修复空字符串，传undefined
+      page: quoteStore.page,
+      pageSize: quoteStore.pageSize,
+    }),
+  {
+    manual: true,
+    onSuccess: (res) => {
+      quoteStore.list = res.list;
+      quoteStore.total = res.total;
+    },
+  },
+);
 
 function onPageChange(p: number) {
+  if (stockId.value === null) return;
   quoteStore.page = p;
-  void loadQuotes();
+  void loadQuotes(stockId.value, range.from, range.to);
 }
 
 function onSizeChange(s: number) {
+  if (stockId.value === null) return;
   quoteStore.pageSize = s;
   quoteStore.page = 1;
-  void loadQuotes();
+  void loadQuotes(stockId.value, range.from, range.to);
 }
 
 onMounted(async () => {
-  await loadStock();
-  await loadQuotes();
-  void loadKline();
+  if (stockId.value === null) return;
+  const id = stockId.value;
+
+  void loadStock(id);
+  void loadQuotes(id, range.from, range.to);
+  void loadKline(id);
 });
 
-watch(stockId, async () => {
-  await loadStock();
-  await loadQuotes();
+watch(stockId, async (newId) => {
+  if (newId === null) return;
+  void loadStock(newId);
+  void loadQuotes(newId, range.from, range.to);
+  void loadKline(newId);
 });
 
 // ==================== 金额/数量格式化（表格显示用） ====================
@@ -443,7 +488,7 @@ function formatAmount(v: number | null | undefined): string {
 
 // ==================== 表单单位转换（录入用） ====================
 type AmountUnit = "CNY" | "WAN" | "YI";
-type VolumeUnit = "SHOU" | "WAN_SHOU"; // 手，万手
+type VolumeUnit = "GU" | "SHOU" | "WAN_SHOU"; // 股，手，万手
 
 const unitToMultiplier = {
   CNY: 1,
@@ -452,11 +497,12 @@ const unitToMultiplier = {
 };
 
 const volumeUnitToMultiplier = {
-  SHOU: 1,
-  WAN_SHOU: 1e4,
+  GU: 1,
+  SHOU: 100, // 1 手 = 100 股
+  WAN_SHOU: 1e6, // 1 万手 = 10,000 手 * 100 = 1,000,000 股 (1e6)
 };
 
-//统一转换为基础单位（元 / 手）
+//统一转换为基础单位（元 / 股）
 function convertToBaseUnit(
   value: number | string | undefined,
   unit: AmountUnit | VolumeUnit,
@@ -554,7 +600,11 @@ async function onSubmitSingle() {
     await quoteApi.create(payload);
     ElMessage.success("录入成功");
     singleVisible.value = false;
-    await loadQuotes();
+    // 录入成功后，同时刷新列表和图表
+    if (stockId.value !== null) {
+      await loadQuotes(stockId.value, range.from, range.to);
+      await loadKline(stockId.value);
+    }
   } finally {
     singleSubmitting.value = false;
   }
@@ -576,11 +626,20 @@ function openEdit(row: QuoteInput) {
   };
 
   const autoVolumeUnit = (val: number | null | undefined) => {
-    if (!val) return { value: undefined, unit: "SHOU" as VolumeUnit };
-    if (Math.abs(val) > 1e4)
-      return { value: val / 1e4, unit: "WAN_SHOU" as VolumeUnit };
+    if (!val) return { value: undefined, unit: "GU" as VolumeUnit };
 
-    return { value: val, unit: "SHOU" as VolumeUnit };
+    // 1. 如果能被 1,000,000 (1万手) 整除，按“万手”显示
+    if (val % 1e6 === 0) {
+      return { value: val / 1e6, unit: "WAN_SHOU" as VolumeUnit };
+    }
+
+    // 2. 如果能被 100 (1手) 整除，按“手”显示
+    if (val % 100 === 0) {
+      return { value: val / 100, unit: "SHOU" as VolumeUnit };
+    }
+
+    // 3. 如果是有零头的股数，直接按“股”显示（保证精确度）
+    return { value: val, unit: "GU" as VolumeUnit };
   };
 
   const vol = autoVolumeUnit(row.volume);
@@ -646,7 +705,11 @@ async function onSubmitImport() {
     parsedRows.value = [];
     parseErrors.value = [];
 
-    await loadQuotes();
+    // 批量录入成功后，同时刷新列表和图表
+    if (stockId.value !== null) {
+      await loadQuotes(stockId.value, range.from, range.to);
+      await loadKline(stockId.value);
+    }
   } finally {
     submitting.value = false;
   }
@@ -667,6 +730,9 @@ async function onDelete(row: { id: string }) {
 
   await quoteStore.remove(row.id, stockId.value);
   ElMessage.success("删除成功");
+  // 删除成功后，同时刷新列表和图表
+  await loadQuotes(stockId.value, range.from, range.to);
+  await loadKline(stockId.value);
 }
 
 const title = computed(() => {
@@ -675,7 +741,7 @@ const title = computed(() => {
 });
 
 // ---------- K 线数据 ----------
-const klineData = ref<DailyQuote[]>([]);
+/* const klineData = ref<DailyQuote[]>([]);
 const klineLoading = ref(false);
 
 async function loadKline() {
@@ -686,19 +752,32 @@ async function loadKline() {
   } finally {
     klineLoading.value = false;
   }
-}
+} */
+
+// 使用useRequest重写loadKline
+// 声明式请求
+const {
+  data: klineData, // 日线数据
+  loading: klineLoading, //加载状态
+  run: loadKline, // 请求方法
+} = useRequest(
+  (id: string) => quoteApi.latest(id, 120),
+  { manual: true, initialData: [] as DailyQuote[] }, // 手动触发
+);
 
 // 筛选变化时不重载 K 线（固定 120 天）
 // 需要时也可 watch(stockId, loadKline)
 
 // ---------- K 线图配置 ----------
 const klineOption = vueComputed<EChartsOption | null>(() => {
-  if (klineData.value.length === 0) return null;
+  // 在开头收窄一次
+  const data = klineData.value ?? [];
+  if (data.length === 0) return null;
 
-  const dates = klineData.value.map((q) => q.date.slice(0, 10));
+  const dates = data.map((q) => q.date.slice(0, 10));
   // ECharts candlestick 要求 [open, close, low, high]
-  const candles = klineData.value.map((q) => [q.open, q.close, q.low, q.high]);
-  const volumes = klineData.value.map((q) => ({
+  const candles = data.map((q) => [q.open, q.close, q.low, q.high]);
+  const volumes = data.map((q) => ({
     value: q.volume,
     itemStyle: {
       color: q.close >= q.open ? "#ef232a" : "#14b143",
@@ -708,14 +787,14 @@ const klineOption = vueComputed<EChartsOption | null>(() => {
   // MA5 / MA10 / MA20
   function calcMA(n: number): (number | null)[] {
     const result: (number | null)[] = [];
-    for (let i = 0; i < klineData.value.length; i += 1) {
+    for (let i = 0; i < data.length; i += 1) {
       if (i < n - 1) {
         result.push(null); // 前 n-1 天不够，填 null
         continue;
       }
       let sum = 0;
       for (let j = 0; j < n; j += 1) {
-        sum += klineData.value[i - j]!.close;
+        sum += data[i - j]!.close;
       }
       result.push(sum / n);
     }
@@ -742,7 +821,7 @@ const klineOption = vueComputed<EChartsOption | null>(() => {
         // 1. 获取当前是第几条数据
         const dataIndex = params[0].dataIndex;
         // 2. 直接从你的源数组里取，绝对错不了！
-        const originalData = klineData.value[dataIndex];
+        const originalData = data[dataIndex];
         if (!originalData) return "";
 
         const date = originalData.date.slice(0, 10);
@@ -795,8 +874,8 @@ const klineOption = vueComputed<EChartsOption | null>(() => {
       top: 0,
     },
     grid: [
-      { left: 50, right: 20, top: 30, height: "60%" }, // K 线区域
-      { left: 50, right: 20, top: "75%", height: "18%" }, // 成交量区域
+      { left: 50, right: 20, top: 30, height: "55%" }, // K 线区域
+      { left: 50, right: 20, top: "75%", height: "15%", bottom: 35 }, // 成交量区域
     ],
     xAxis: [
       {
@@ -866,7 +945,8 @@ const klineOption = vueComputed<EChartsOption | null>(() => {
         show: true,
         xAxisIndex: [0, 1],
         type: "slider",
-        bottom: 0,
+        bottom: 5,
+        height: 16,
         start: 50,
         end: 100,
       },

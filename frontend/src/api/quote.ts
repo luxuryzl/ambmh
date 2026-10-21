@@ -56,8 +56,17 @@ export interface Paginated<T> {
 }
 
 export const quoteApi = {
-  list: (params: QuoteListParams) =>
-    http<Paginated<DailyQuote>>({ url: "/quotes", method: "GET", params }),
+  list: (params: QuoteListParams) => {
+    // 自动清理空字符串
+    const cleanParams = { ...params };
+    if (cleanParams.from === "") delete cleanParams.from;
+    if (cleanParams.to === "") delete cleanParams.to;
+    return http<Paginated<DailyQuote>>({
+      url: "/quotes",
+      method: "GET",
+      params: cleanParams,
+    });
+  },
 
   latest: (stockId: string, limit = 60) =>
     http<DailyQuote[]>({

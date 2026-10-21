@@ -69,6 +69,21 @@ export const useStockStore = defineStore("stock", () => {
     return res;
   }
 
+  // 缓存已查询过的股票详情
+  const detailCache = ref<Record<string, Stock>>({});
+
+  async function fetchDetail(id: string, forceRefresh = false) {
+    // 1.如果有缓存，且不是强制刷新，直接返回缓存
+    if (!forceRefresh && detailCache.value[id]) {
+      return detailCache.value[id];
+    }
+    // 2.如果没有缓存，或者强制刷新，则从接口获取数据
+    const data = await stockApi.detail(id);
+    // 3.将数据缓存起来
+    detailCache.value[id] = data;
+    return data;
+  }
+
   return {
     list,
     total,
@@ -83,5 +98,6 @@ export const useStockStore = defineStore("stock", () => {
     remove,
     reset,
     importItems,
+    fetchDetail,
   };
 });
