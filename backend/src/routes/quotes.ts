@@ -15,7 +15,9 @@ const QuoteBody = z.object({
   close: z.number(),
   volume: z.number().nonnegative(), // 非负数，包含0
   amount: z.number().nonnegative().optional(),
+  amplitude: z.number().optional(),
   pctChange: z.number().optional(),
+  change: z.number().optional(),
   turnover: z.number().optional(),
 });
 

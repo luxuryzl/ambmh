@@ -61,6 +61,8 @@ model DailyQuote {
   amount    Float?                     // 成交额
   pctChange Float?                     // 涨跌幅 %
   turnover  Float?                     // 换手率 %
+  amplitude   Float?                   // 振幅 %
+  change     Float?                    // 涨跌 元
   createdAt DateTime @default(now())
 
   stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)

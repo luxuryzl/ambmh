@@ -11,6 +11,14 @@
           </div>
           <div class="header-right">
             <el-button
+              type="info"
+              :icon="Download"
+              :loading="syncing"
+              @click="onSyncQuotes"
+            >
+              同步最新数据
+            </el-button>
+            <el-button
               type="primary"
               :icon="Upload"
               @click="importVisible = true"
@@ -81,20 +89,31 @@
       </el-card>
       <!-- 日数据显示列表 -->
       <el-table :data="quoteStore.list" v-loading="listLoading" stripe>
-        <el-table-column label="日期" width="120">
+        <el-table-column label="日期" width="100">
           <template #default="{ row }">{{ row.date.slice(0, 10) }}</template>
         </el-table-column>
-        <el-table-column prop="open" label="开盘" width="100" />
-        <el-table-column prop="high" label="最高" width="100" />
-        <el-table-column prop="low" label="最低" width="100" />
-        <el-table-column prop="close" label="收盘" width="100" />
+        <el-table-column prop="open" label="开盘" width="80" />
+        <el-table-column prop="high" label="最高" width="80" />
+        <el-table-column prop="low" label="最低" width="80" />
+        <el-table-column prop="close" label="收盘" width="80" />
         <el-table-column label="成交量" width="100">
           <template #default="{ row }">{{ formatVolume(row.volume) }}</template>
         </el-table-column>
         <el-table-column label="成交额" width="100">
           <template #default="{ row }">{{ formatAmount(row.amount) }}</template>
         </el-table-column>
-        <el-table-column label="涨幅" width="100">
+        <el-table-column label="涨跌额" width="90">
+          <template #default="{ row }">
+            <span :class="row.change >= 0 ? 'up' : 'down'">
+              {{
+                row.change != null
+                  ? `${row.change > 0 ? "+" : ""}${row.change.toFixed(2)}`
+                  : "—"
+              }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="涨幅" width="90">
           <template #default="{ row }">
             <span :class="row.pctChange >= 0 ? 'up' : 'down'">
               {{ row.pctChange != null ? `${row.pctChange.toFixed(2)}%` : "—" }}
@@ -105,6 +124,11 @@
           <template #default="{ row }">{{
             row.turnover != null ? `${row.turnover.toFixed(2)}%` : "—"
           }}</template>
+        </el-table-column>
+        <el-table-column label="振幅" width="100">
+          <template #default="{ row }">
+            {{ row.amplitude != null ? `${row.amplitude.toFixed(2)}%` : "—" }}
+          </template>
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
@@ -350,7 +374,14 @@ import {
   ElMessageBox,
   type FormInstance,
 } from "element-plus";
-import { Upload, Delete, Refresh, Plus, Edit } from "@element-plus/icons-vue";
+import {
+  Upload,
+  Delete,
+  Refresh,
+  Plus,
+  Edit,
+  Download,
+} from "@element-plus/icons-vue";
 import { useStockStore } from "@/stores/stock";
 import { useQuoteStore } from "@/stores/quote";
 import { stockApi } from "@/api/stock";
@@ -358,6 +389,7 @@ import { quoteApi, type DailyQuote, type QuoteInput } from "@/api/quote";
 import { parseQuoteText, type ParsedRow } from "@/utils/parseQuoteText";
 import type { Stock } from "@/api/stock";
 import { TrendCharts } from "@element-plus/icons-vue";
+import { syncApi } from "@/api/sync";
 
 // 增加图表
 import { computed as vueComputed } from "vue";
@@ -808,59 +840,88 @@ const klineOption = vueComputed<EChartsOption | null>(() => {
   return {
     animation: false,
     tooltip: {
-      trigger: "axis", // 鼠标放在某个 X 坐标上，显示该列所有 series 的值
-      axisPointer: { type: "cross" }, // 十字准星
-      backgroundColor: "rgba(255,255,255,0.95)",
+      trigger: "axis",
+      axisPointer: { type: "cross" },
+      confine: true, //强制提示框不超出图表的边界
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
       borderColor: "#ddd",
       borderWidth: 1,
-      padding: 10,
-      // 自定义formatter，把提示框中的英文改成中文，并格式化小数点
+      padding: 12,
       formatter: (params: any) => {
         if (!params || params.length === 0) return "";
 
-        // 1. 获取当前是第几条数据
         const dataIndex = params[0].dataIndex;
-        // 2. 直接从你的源数组里取，绝对错不了！
-        const originalData = data[dataIndex];
+        const originalData = klineData.value
+          ? klineData.value[dataIndex]
+          : null;
         if (!originalData) return "";
 
         const date = originalData.date.slice(0, 10);
-        let html = `<div style="margin-bottom: 8px; font-weight: bold; font-size: 14px;">${date}</div>`;
+        let html = `<div style="margin-bottom: 8px; font-weight: bold; font-size: 14px; color: #333;">${date}</div>`;
 
-        // 3. 直接取对象里的值
         const open = originalData.open;
         const close = originalData.close;
         const low = originalData.low;
         const high = originalData.high;
         const volume = originalData.volume;
+        const amount = originalData.amount;
+        const pctChange = originalData.pctChange;
+        const turnover = originalData.turnover;
+        const change = originalData.change;
+        const amplitude = originalData.amplitude;
 
+        // 判断颜色（红涨绿跌）
         const isUp = close >= open;
         const color = isUp ? "#ef232a" : "#14b143";
 
+        // 格式化辅助
+        const fmtPrice = (v: number | undefined) =>
+          v != null ? v.toFixed(2) : "—";
+        const fmtAmount = (v: number | undefined | null) => {
+          if (v == null) return "—";
+          const abs = Math.abs(v);
+          if (abs >= 1e8) return `${(v / 1e8).toFixed(2)}亿`;
+          if (abs >= 1e4) return `${(v / 1e4).toFixed(2)}万`;
+          return v.toFixed(2);
+        };
+
+        // ⭐️ 核心修改：使用 Grid 分为左右两列
         html += `
-          <div style="display: grid; grid-template-columns: 50px 1fr; gap: 4px 12px; font-size: 13px;">
-            <span style="color: #666;">开盘:</span> <span style="font-weight: bold; color: ${color}; text-align: right;">${Number(open).toFixed(2)}</span>
-            <span style="color: #666;">收盘:</span> <span style="font-weight: bold; color: ${color}; text-align: right;">${Number(close).toFixed(2)}</span>
-            <span style="color: #666;">最低:</span> <span style="font-weight: bold; color: ${color}; text-align: right;">${Number(low).toFixed(2)}</span>
-            <span style="color: #666;">最高:</span> <span style="font-weight: bold; color: ${color}; text-align: right;">${Number(high).toFixed(2)}</span>
-            <span style="color: #666;">成交量:</span> <span style="font-weight: bold; text-align: right;">${formatVolume(volume)}</span>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 13px; min-width: 280px;">
+            
+            <!-- 左列：价格与涨跌 -->
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">开盘:</span> <span style="font-weight: bold; color: ${color};">${fmtPrice(open)}</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">收盘:</span> <span style="font-weight: bold; color: ${color};">${fmtPrice(close)}</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">最高:</span> <span style="font-weight: bold; color: ${color};">${fmtPrice(high)}</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">最低:</span> <span style="font-weight: bold; color: ${color};">${fmtPrice(low)}</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">涨幅:</span> <span style="font-weight: bold; color: ${pctChange && pctChange >= 0 ? "#ef232a" : "#14b143"};">${pctChange != null ? pctChange.toFixed(2) + "%" : "—"}</span></div>
+            </div>
+
+            <!-- 右列：量能与振幅 -->
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">涨跌额:</span> <span style="font-weight: bold; color: ${change && change >= 0 ? "#ef232a" : "#14b143"};">${change != null ? (change > 0 ? "+" : "") + change.toFixed(2) : "—"}</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">振幅:</span> <span style="font-weight: bold; color: #333;">${amplitude != null ? amplitude.toFixed(2) + "%" : "—"}</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">成交量:</span> <span style="font-weight: bold; color: #333;">${formatVolume(volume)}</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">成交额:</span> <span style="font-weight: bold; color: #333;">${fmtAmount(amount)}</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #666;">换手率:</span> <span style="font-weight: bold; color: #333;">${turnover != null ? turnover.toFixed(2) + "%" : "—"}</span></div>
+            </div>
+
           </div>
         `;
 
-        // 均线部分
+        // 均线部分（保持原样，放在最下面，或者你也可以把它排进左边）
         const lineParams = params.filter(
           (p: any) => p.seriesType === "line" && p.value != null,
         );
         if (lineParams.length > 0) {
-          html += `<div style="border-top: 1px dashed #eee; margin-top: 8px; padding-top: 8px;">`;
+          html += `<div style="border-top: 1px dashed #eee; margin-top: 8px; padding-top: 8px; display: flex; justify-content: space-around; font-size: 12px;">`;
           lineParams.forEach((p: any) => {
             html += `
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 4px;">
-                <span style="display: flex; align-items: center; gap: 6px;">
-                  <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${p.color};"></span>
-                  ${p.seriesName}
-                </span>
-                <span style="font-weight: bold;">${Number(p.value).toFixed(2)}</span>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:${p.color};"></span>
+                <span style="color:#666;">${p.seriesName}:</span>
+                <span style="font-weight: bold; color: #333;">${Number(p.value).toFixed(2)}</span>
               </div>
             `;
           });
@@ -997,6 +1058,27 @@ const klineOption = vueComputed<EChartsOption | null>(() => {
     ],
   };
 });
+
+// 同步股票数据
+const syncing = ref(false);
+
+async function onSyncQuotes() {
+  if (stockId.value === null) return;
+
+  syncing.value = true;
+
+  try {
+    const res = await syncApi.syncQuotes(stockId.value);
+    ElMessage.success(`同步成功，新增 ${res.created} 条，更新${res.updated}条`);
+
+    // 刷新页面数据和图表
+    await loadQuotes(stockId.value, range.from, range.to);
+    await loadKline(stockId.value);
+  } catch {
+  } finally {
+    syncing.value = false;
+  }
+}
 </script>
 
 <style scoped>

@@ -10,6 +10,18 @@
             }}</el-tag>
           </div>
           <div class="header-right">
+            <el-button
+              type="info"
+              :icon="Download"
+              :loading="syncing"
+              @click="
+                () => {
+                  if (stockId) runSync(stockId);
+                }
+              "
+            >
+              同步资金流
+            </el-button>
             <el-button type="primary" :icon="Upload" @click="openImport"
               >批量录入</el-button
             >
@@ -41,14 +53,22 @@
           value-format="YYYY-MM-DD"
           placeholder="结束日期"
         />
-        <el-button type="primary" @click="loadAll">查询</el-button>
+        <el-button
+          type="primary"
+          @click="
+            () => {
+              if (stockId) loadAll(stockId, range.from, range.to);
+            }
+          "
+          >查询</el-button
+        >
         <el-button
           :icon="Refresh"
           @click="
             () => {
               range.from = '';
               range.to = '';
-              loadAll();
+              if (stockId) loadAll(stockId, undefined, undefined);
             }
           "
           >重置</el-button
@@ -157,7 +177,7 @@
       </el-card>
 
       <!-- 数据表格 -->
-      <el-table :data="flowStore.list" v-loading="flowStore.loading" stripe>
+      <el-table :data="flowStore.list" v-loading="listLoading" stripe>
         <el-table-column label="日期" width="110">
           <template #default="{ row }">{{ row.date.slice(0, 10) }}</template>
         </el-table-column>
@@ -168,11 +188,29 @@
             }}</span>
           </template>
         </el-table-column>
+        <el-table-column label="主力占比" width="100">
+          <template #default="{ row }">
+            <span :class="amountClass(row.mainNetRatio)">
+              {{
+                row.mainNetRatio != null
+                  ? `${row.mainNetRatio.toFixed(2)}%`
+                  : "—"
+              }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column label="5日主力" min-width="110">
           <template #default="{ row }">
             <span :class="amountClass(row.mainNet5d)">{{
               formatAmount(row.mainNet5d)
             }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="10日主力" min-width="110">
+          <template #default="{ row }">
+            <span :class="amountClass(row.mainNet10d)">
+              {{ formatAmount(row.mainNet10d) }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="超大单" min-width="100">
@@ -225,14 +263,14 @@
         @current-change="
           (p: number) => {
             flowStore.page = p;
-            loadAll();
+            if (stockId) loadAll(stockId, undefined, undefined);
           }
         "
         @size-change="
           (s: number) => {
             flowStore.pageSize = s;
             flowStore.page = 1;
-            loadAll();
+            if (stockId) loadAll(stockId, undefined, undefined);
           }
         "
       />
@@ -486,15 +524,17 @@ import {
   Refresh,
   View,
   Edit,
+  Download,
 } from "@element-plus/icons-vue";
 import { useFundFlowStore } from "@/stores/fundFlow";
-import { useStockStore } from "@/stores/stock";
 import { stockApi } from "@/api/stock";
 import type { Stock } from "@/api/stock";
 import {
   parseFundFlowText,
   type ParsedFlowRow,
 } from "@/utils/parseFundFlowText";
+import { syncApi } from "@/api/sync";
+import { useRequest } from "@/composables/useRequest";
 
 // 加图表
 import { computed as vueComputed } from "vue";
@@ -510,19 +550,26 @@ const stockId = computed<string | null>(() => {
   return typeof id === "string" && id.length > 0 ? id : null;
 });
 
-const stock = ref<Stock | null>(null);
 const range = reactive({ from: "", to: "" });
 
 const dialogMode = ref<"create" | "edit">("create");
 const dialogTitle = computed(() => {
   return dialogMode.value === "create" ? "单条录入" : "编辑";
 });
+
+/* const stock = ref<Stock | null>(null);
 async function loadStock() {
   if (stockId.value === null) return;
   stock.value = await stockApi.detail(stockId.value);
-}
+} */
 
-async function loadAll() {
+// 用useRequest重构loadStock
+const { data: stock, run: loadStock } = useRequest(
+  (id: string) => stockApi.detail(id),
+  { manual: true, initialData: null as Stock | null },
+);
+
+/* async function loadAll() {
   if (stockId.value === null) return;
   await Promise.all([
     flowStore.fetchList(
@@ -532,17 +579,49 @@ async function loadAll() {
     ),
     flowStore.fetchAnalysis(stockId.value),
   ]);
-}
+} */
+
+// 用useRequest重构loadStock，将store里的请求逻辑包装成一个整体Promise
+const { loading: listLoading, run: loadAll } = useRequest(
+  async (id: string, from?: string, to?: string) => {
+    const [listRes] = await Promise.all([
+      fundFlowApi.list({
+        stockId: id,
+        from: from || undefined,
+        to: to || undefined, //防御空字符串
+        page: flowStore.page,
+        pageSize: flowStore.pageSize,
+      }),
+      flowStore.fetchAnalysis(id),
+    ]);
+    return listRes;
+  },
+  {
+    manual: true,
+    onSuccess: (res) => {
+      // 写入Pinia
+      flowStore.list = res.list;
+      flowStore.total = res.total;
+    },
+  },
+);
 
 onMounted(async () => {
-  await loadStock();
-  await loadAll();
-  void loadFlowChart();
+  if (stockId.value === null) return;
+
+  // 获取基础信息，从store的缓存里拿
+  void loadStock(stockId.value); //获取stock
+  // 触发列表、分析和图表
+  void loadAll(stockId.value, range.from, range.to);
+  void loadFlowChart(stockId.value);
 });
 
-watch(stockId, async () => {
-  await loadStock();
-  await loadAll();
+watch(stockId, (newId) => {
+  if (newId === null) return;
+
+  void loadStock(newId);
+  void loadAll(newId, range.from, range.to);
+  void loadFlowChart(newId);
 });
 
 // ---------- 金额格式化 ----------
@@ -565,7 +644,7 @@ const importVisible = ref(false);
 const importText = ref("");
 const parsedRows = ref<ParsedFlowRow[]>([]);
 const parseErrors = ref<{ line: number; message: string }[]>([]);
-const submitting = ref(false);
+// const submitting = ref(false);
 
 function openImport() {
   importText.value = "";
@@ -580,37 +659,40 @@ function onParse() {
   parseErrors.value = res.errors;
 }
 
+// 批量录入提交
+const { loading: submitting, run: runImport } = useRequest(
+  (payload: any) => flowStore.batchCreate(stockId.value!, payload),
+  {
+    manual: true,
+    onSuccess: (res) => {
+      ElMessage.success(
+        `新增${res.created}条数据，更新${res.updated}条数据，跳过${res.skipped}条数据`,
+      );
+
+      if (res.errors.length > 0) {
+        ElMessage.warning(`${res.errors.length} 条失败`);
+      }
+
+      importVisible.value = false;
+
+      if (stockId.value) {
+        void loadAll(stockId.value, range.from, range.to);
+        void loadFlowChart(stockId.value);
+      }
+    },
+  },
+);
 async function onSubmitImport() {
-  if (stockId.value === null) return;
-  if (parsedRows.value.length === 0) {
-    ElMessage.warning("没有可提交的数据");
-    return;
-  }
-  submitting.value = true;
-  try {
-    const res = await flowStore.batchCreate(stockId.value, parsedRows.value);
-    ElMessage.success(
-      `新增 ${res.created}，更新 ${res.updated}，跳过 ${res.skipped}`,
-    );
-    if (res.errors.length > 0) {
-      const detail = res.errors
-        .slice(0, 3)
-        .map((e) => `第 ${e.index + 1} 条（${e.date}）：${e.message}`)
-        .join("；");
-      ElMessage.warning(`${res.errors.length} 条失败：${detail}`);
-    }
-    importVisible.value = false;
-    await loadAll();
-  } finally {
-    submitting.value = false;
-  }
+  if (stockId.value === null || parsedRows.value.length === 0) return;
+
+  await runImport(parsedRows.value);
 }
 
 // ---------- 单条录入 ----------
 type AmountUnit = "CNY" | "WAN" | "YI";
 const singleVisible = ref(false);
 const singleFormRef = ref<FormInstance>();
-const singleSubmitting = ref(false);
+// const singleSubmitting = ref(false);
 const singleForm = reactive({
   date: "",
   mainNet: undefined as number | undefined,
@@ -665,35 +747,44 @@ function openSingle() {
   singleVisible.value = true;
 }
 
+// 改造单条录入，保留useRequest来做提交
+const { loading: singleSubmitting, run: submitSingle } = useRequest(
+  (payload: any) => flowStore.create(stockId.value!, payload),
+  {
+    manual: true,
+    onSuccess: () => {
+      ElMessage.success("录入成功");
+      singleVisible.value = false;
+      // 这里统一刷新
+      if (stockId.value) {
+        void loadAll(stockId.value, range.from, range.to);
+        void loadFlowChart(stockId.value);
+      }
+    },
+  },
+);
+
 async function onSubmitSingle() {
-  if (stockId.value === null) return;
-  if (!singleFormRef.value) return;
+  if (stockId.value === null || !singleFormRef.value) return;
+
   const valid = await singleFormRef.value.validate().catch(() => false);
   if (!valid) return;
 
-  singleSubmitting.value = true;
-
-  try {
-    // 在提交前，将各个字段统一转换为“元”
-    const payload = {
-      date: singleForm.date,
-      mainNet: converToYuan(singleForm.mainNet, singleForm.mainNetUnit),
-      mainNet5d: converToYuan(singleForm.mainNet5d, singleForm.mainNet5dUnit),
-      superLargeNet: converToYuan(
-        singleForm.superLargeNet,
-        singleForm.superLargeNetUnit,
-      ),
-      largeNet: converToYuan(singleForm.largeNet, singleForm.largeNetUnit),
-      mediumNet: converToYuan(singleForm.mediumNet, singleForm.mediumNetUnit),
-      smallNet: converToYuan(singleForm.smallNet, singleForm.smallNetUnit),
-    };
-    await flowStore.create(stockId.value, payload);
-    ElMessage.success("录入成功");
-    singleVisible.value = false;
-    await loadAll();
-  } finally {
-    singleSubmitting.value = false;
-  }
+  // 在提交前，将各个字段统一转换为“元”
+  const payload = {
+    date: singleForm.date,
+    mainNet: converToYuan(singleForm.mainNet, singleForm.mainNetUnit),
+    mainNet5d: converToYuan(singleForm.mainNet5d, singleForm.mainNet5dUnit),
+    superLargeNet: converToYuan(
+      singleForm.superLargeNet,
+      singleForm.superLargeNetUnit,
+    ),
+    largeNet: converToYuan(singleForm.largeNet, singleForm.largeNetUnit),
+    mediumNet: converToYuan(singleForm.mediumNet, singleForm.mediumNetUnit),
+    smallNet: converToYuan(singleForm.smallNet, singleForm.smallNetUnit),
+  };
+  // 触发提交
+  await submitSingle(payload);
 }
 
 function openEdit(row: FundFlowInput) {
@@ -737,6 +828,22 @@ function openEdit(row: FundFlowInput) {
   });
   singleVisible.value = true;
 }
+
+// 重构onDelete，先用useRequest包装删除接口
+const { run: runDelete } = useRequest(
+  (id: string) => flowStore.remove(id, stockId.value!),
+  {
+    manual: true,
+    onSuccess: () => {
+      ElMessage.success("删除成功");
+      // 删除成功后，并发刷新列表和图表
+      if (stockId.value) {
+        void loadAll(stockId.value, range.from, range.to);
+        void loadFlowChart(stockId.value);
+      }
+    },
+  },
+);
 async function onDelete(row: { id: string }) {
   if (stockId.value === null) return;
   try {
@@ -744,11 +851,10 @@ async function onDelete(row: { id: string }) {
       type: "warning",
     });
   } catch {
-    return;
+    return; //用户点了取消
   }
-  await flowStore.remove(row.id, stockId.value);
-  ElMessage.success("删除成功");
-  await loadAll();
+  // 调用useRequest触发的run方法
+  await runDelete(row.id);
 }
 
 const title = computed(() => {
@@ -757,7 +863,7 @@ const title = computed(() => {
 });
 
 // 加图表
-const flowChartData = ref<FundFlow[]>([]);
+/* const flowChartData = ref<FundFlow[]>([]);
 const flowChartLoading = ref(false);
 
 async function loadFlowChart() {
@@ -768,37 +874,74 @@ async function loadFlowChart() {
   } finally {
     flowChartLoading.value = false;
   }
-}
+} */
+
+// 使用useRequest 接管数据与加载状态
+const {
+  data: flowChartData,
+  loading: flowChartLoading,
+  run: loadFlowChart,
+} = useRequest((id: string) => fundFlowApi.latest(id, 60), {
+  manual: true,
+  initialData: [] as FundFlow[],
+});
 
 const flowOption = vueComputed<EChartsOption | null>(() => {
-  if (flowChartData.value.length === 0) return null;
+  // 类型收窄，如果为undefined，则回退为空数据
+  const data = flowChartData.value ?? [];
+  if (data.length === 0) return null;
 
   // 如果数据少于 20 条，就不显示底部的滑动条
-  const showZoom = flowChartData.value.length > 20;
-  const dates = flowChartData.value.map((f) => f.date.slice(0, 10));
-  const mainNet = flowChartData.value.map((f) => f.mainNet);
-  const mainNet5d = flowChartData.value.map((f) => f.mainNet5d);
+  const showZoom = data.length > 20;
+  const dates = data.map((f) => f.date.slice(0, 10));
+  const mainNet = data.map((f) => f.mainNet);
+  const mainNet5d = data.map((f) => f.mainNet5d);
+  const mainNet10d = data.map((f) => f.mainNet10d);
 
   return {
     animation: false,
     tooltip: {
       trigger: "axis",
-      axisPointer: { type: "shadow" },
-      valueFormatter: (value) => {
-        const v = Number(value);
-        if (isNaN(v)) return "—";
-        const abs = Math.abs(v);
-        if (abs >= 1e8) return `${(v / 1e8).toFixed(2)}亿`;
-        if (abs >= 1e4) return `${(v / 1e4).toFixed(2)}万`;
-        return `${v.toFixed(2)}`;
+      axisPointer: {
+        type: "line",
+        lineStyle: { color: "#ccc", type: "dashed" },
+      },
+      formatter: (params: any) => {
+        if (!params || params.length === 0) return "";
+        const date = params[0].axisValue;
+        let html = `<div style="margin-bottom: 8px; font-weight: bold;">${date}</div>`;
+
+        params.forEach((p: any) => {
+          // 如果该点没有数据，就直接显示“—”
+          let valStr = "—";
+          if (
+            p.value !== null &&
+            p.value !== undefined &&
+            !isNaN(Number(p.value))
+          ) {
+            const v = Number(p.value);
+            const abs = Math.abs(v);
+            if (abs >= 1e8) valStr = `${(v / 1e8).toFixed(2)}亿`;
+            else if (abs >= 1e4) valStr = `${(v / 1e4).toFixed(2)}万`;
+            else valStr = `${v.toFixed(2)}`;
+          }
+
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 13px; margin-bottom: 4px;">
+              <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${p.color}; margin-right:6px;"></span>${p.seriesName}</span>
+              <span>${valStr}</span>
+            </div>
+          `;
+        });
+        return html;
       },
     },
-    legend: { data: ["主力净额", "5日主力"], top: 0 },
+    legend: { data: ["主力净额", "5日主力", "10日主力"], top: 0 },
     grid: { left: 60, right: 20, top: 30, bottom: 40 },
     xAxis: {
       type: "category",
       data: dates,
-      axisLabel: { rotate: 30 },
+      axisLabel: { rotate: 30, interval: "auto", margin: 10 },
     },
     yAxis: {
       type: "value",
@@ -834,9 +977,59 @@ const flowOption = vueComputed<EChartsOption | null>(() => {
         showSymbol: false,
         lineStyle: { width: 2 },
       },
+      {
+        name: "10日主力",
+        type: "line",
+        // 关键：把 0 转成 null，这样 ECharts 才知道这是“无数据”，而不是“净额为0”
+        data: mainNet10d.map((v) => (v === 0 || v === undefined ? null : v)),
+        smooth: true,
+        showSymbol: false,
+        connectNulls: true, // 允许跨越空值连线
+        lineStyle: { width: 2, color: "#e6a23c" },
+      },
     ],
   };
 });
+
+// 增加同步资金数据的按钮，处理逻辑
+/* const syncing = ref(false);
+
+async function onSyncFlow() {
+  if (stockId.value === null) return;
+
+  syncing.value = true;
+
+  try {
+    const res = await syncApi.syncFundFlow(stockId.value);
+    ElMessage.success(`同步成功，新增 ${res.created} 条，更新${res.updated}条`);
+
+    // 刷新页面数据和图表
+    await Promise.all([
+      loadAll(),
+      loadFlowChart(), // 加载图表
+    ]);
+  } finally {
+    syncing.value = false;
+  }
+} */
+
+// 使用useRequest 重构onSyncFlow
+const { loading: syncing, run: runSync } = useRequest(
+  (id: string) => syncApi.syncFundFlow(id),
+  {
+    manual: true,
+    onSuccess: (res) => {
+      ElMessage.success(
+        `同步成功，新增 ${res.created} 条，更新${res.updated}条`,
+      );
+      // 同步成功后，并发刷新列表和图表
+      if (stockId.value) {
+        void loadAll(stockId.value, range.from, range.to);
+        void loadFlowChart(stockId.value);
+      }
+    },
+  },
+);
 </script>
 
 <style scoped>

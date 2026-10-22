@@ -19,7 +19,9 @@ export const QuoteData = {
     close: { type: "number" },
     volume: { type: "number" }, //成交量
     amount: { type: ["number", "null"] }, //成交额
+    amplitude: { type: ["number", "null"] }, //振幅
     pctChange: { type: ["number", "null"] }, //涨跌幅
+    change: { type: ["number", "null"] },
     turnover: { type: ["number", "null"] }, //换手率
     createdAt: { type: "string" },
   },

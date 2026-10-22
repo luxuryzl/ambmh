@@ -44,7 +44,9 @@ export function toQuoteDto(q: DailyQuote) {
     close: q.close,
     volume: q.volume,
     amount: q.amount,
+    amplitude: q.amplitude,
     pctChange: q.pctChange,
+    change: q.change,
     turnover: q.turnover,
     createdAt: q.createdAt.toISOString(),
   };

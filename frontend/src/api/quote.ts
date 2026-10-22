@@ -11,7 +11,9 @@ export interface DailyQuote {
   close: number;
   volume: number;
   amount: number | null;
+  amplitude: number | null;
   pctChange: number | null;
+  change: number | null;
   turnover: number | null;
   createdAt: string;
 }
